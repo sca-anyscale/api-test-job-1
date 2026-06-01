@@ -19,14 +19,15 @@ compute_config:
       GPU: 0
     flags: {}
   worker_nodes:
-    - instance_type: m5.4xlarge
+    - name: cpu_node
+      instance_type: m5.4xlarge
       name: cpu_node
       flags: {}
       min_nodes: 0
       max_nodes: 2
       market_type: ON_DEMAND
-    - instance_type: m5.4xlarge
-      name: fake_gpu_node
+    - name: fake_gpu_node
+      instance_type: m5.4xlarge
       resources:
         CPU: 16
         GPU: 1
