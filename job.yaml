@@ -21,7 +21,6 @@ compute_config:
   worker_nodes:
     - name: cpu_node
       instance_type: m5.4xlarge
-      name: cpu_node
       flags: {}
       min_nodes: 0
       max_nodes: 2
