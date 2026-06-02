@@ -52,6 +52,7 @@ working_dir: .
 cloud: anyscale_v2_default_cloud
 
 env_vars:
+  RAY_BACKEND_LOG_LEVEL: "debug"
 
 # The script to run in your job. You can also do "uv run main.py" if you have a
 # pyproject.toml file in your working_dir.
