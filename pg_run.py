@@ -42,7 +42,7 @@ def main():
 
     ray.get(pg.ready())
 
-    time.sleep(5)
+    # time.sleep(5)
 
     workers = [
         Worker.options(

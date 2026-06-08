@@ -8,7 +8,8 @@ name: prasad-image-classification-m5n-g6.4xlarge-20260225-3
 # image_uri:  # anyscale/ray:2.43.0-slim-py312-cu125
 #image_uri: anyscale/ray:2.53.0-slim-py312-cu129
 #image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:prasad_rt
-image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-oss-perf-bl-4
+#image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-oss-perf-bl-4
+image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:2.55.1-slim-py312-cu129
 #containerfile: ./Dockerfile
 
 compute_config:
@@ -53,6 +54,7 @@ cloud: anyscale_v2_default_cloud
 
 env_vars:
   RAY_BACKEND_LOG_LEVEL: "debug"
+  ANYSCALE_DISABLE_OPTIMIZED_RAY: "true"
 
 # The script to run in your job. You can also do "uv run main.py" if you have a
 # pyproject.toml file in your working_dir.
