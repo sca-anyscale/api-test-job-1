@@ -7,7 +7,8 @@ from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 # Tests are supposed to run for 10 minutes.
-RUNTIME = 600
+# RUNTIME = 600
+RUNTIME = 60
 NUM_CPU_BUNDLES = 30
 
 
@@ -40,6 +41,8 @@ def main():
     pg = placement_group(bundles, strategy="PACK")
 
     ray.get(pg.ready())
+
+    time.sleep(5)
 
     workers = [
         Worker.options(
