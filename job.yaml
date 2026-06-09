@@ -10,7 +10,7 @@ name: prasad-image-classification-m5n-g6.4xlarge-20260225-3
 #image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:prasad_rt
 #image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-oss-perf-bl-4
 #image_uri: anyscale/ray:2.54.1-slim-py312-cu129
-image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-4076-bisect-8
+image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-4076-bisect-9
 #containerfile: ./Dockerfile
 
 compute_config:
