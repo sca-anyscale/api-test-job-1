@@ -37,7 +37,8 @@ def main():
     ray.init(address="auto")
     res = ray.cluster_resources()
     num_gpu = int(res.get('GPU', 0))
-    num_cpu = int(res['CPU'] - 2)
+    #num_cpu = int(res['CPU'] - 2 * num_gpu) # assumes 1 GPU per GPU node
+    num_cpu = int(res['CPU'] / 2) + 1
 
     bundles = []
     bundles += [{"CPU": 1, "GPU": 1} for _ in range(num_gpu)]
