@@ -33,8 +33,8 @@ compute_config:
         CPU: 16
         GPU: 1
       flags: {}
-      min_nodes: 1
-      max_nodes: 1
+      min_nodes: 2
+      max_nodes: 2
       market_type: ON_DEMAND
   enable_cross_zone_scaling: false
 
