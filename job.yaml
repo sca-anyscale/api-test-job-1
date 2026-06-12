@@ -24,8 +24,8 @@ compute_config:
     - name: "cpu_node"
       instance_type: m5.4xlarge
       flags: {}
-      min_nodes: 0
-      max_nodes: 2
+      min_nodes: 1
+      max_nodes: 1
       market_type: ON_DEMAND
     - name: "fake_gpu_node"
       instance_type: m5.4xlarge
@@ -33,8 +33,8 @@ compute_config:
         CPU: 16
         GPU: 1
       flags: {}
-      min_nodes: 0
-      max_nodes: 2
+      min_nodes: 1
+      max_nodes: 1
       market_type: ON_DEMAND
   enable_cross_zone_scaling: false
 

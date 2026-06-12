@@ -9,7 +9,8 @@ from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 # Tests are supposed to run for 10 minutes.
 # RUNTIME = 600
 RUNTIME = 60
-NUM_CPU_BUNDLES = 30
+#NUM_CPU_BUNDLES = 30
+#NUM_GPU_BUNDLES = 1
 
 
 @ray.remote(num_cpus=1)
@@ -34,31 +35,47 @@ class Trainer(object):
 
 def main():
     ray.init(address="auto")
+    res = ray.cluster_resources()
+    num_gpu = int(res.get('GPU', 0))
+    num_cpu = int(res['CPU'] - 2)
 
-    bundles = [{"CPU": 1, "GPU": 1}]
-    bundles += [{"CPU": 1} for _ in range(NUM_CPU_BUNDLES)]
+    bundles = []
+    bundles += [{"CPU": 1, "GPU": 1} for _ in range(num_gpu)]
+    bundles += [{"CPU": 1} for _ in range(num_cpu)]
 
+    start_ts = time.time()
     pg = placement_group(bundles, strategy="PACK")
+    create_ts = time.time()
 
     ray.get(pg.ready())
+    ready_ts = time.time()
 
     # time.sleep(5)
+    print(f'  Creation: {create_ts - start_ts:.2f}s')
+    print(f'  Ready:    {ready_ts - create_ts:.2f}s')
 
     workers = [
         Worker.options(
             scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
         ).remote(i)
-        for i in range(NUM_CPU_BUNDLES)
+        for i in range(num_cpu)
     ]
 
-    trainer = Trainer.options(
-        scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-    ).remote(0)
+    trainers = [
+        Trainer.options(
+            scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
+        ).remote(i)
+        for i in range(num_gpu)
+    ]
+
+    print(f'Workers: {len(workers)}')
+    print(f'Trainers: {len(trainers)}')
 
     start = time.time()
     while True:
-        ray.get([workers[i].work.remote() for i in range(NUM_CPU_BUNDLES)])
-        ray.get(trainer.train.remote())
+        ray.get([workers[i].work.remote() for i in range(num_cpu)])
+        #ray.get(trainer.train.remote())
+        ray.get([trainers[i].train.remote() for i in range(num_gpu)])
         end = time.time()
         if end - start > RUNTIME:
             break
