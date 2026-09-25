@@ -1,7 +1,9 @@
 import argparse
+from pprint import pprint
 import time
 
 import ray
+import ray._private.state as state
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
@@ -16,20 +18,19 @@ NODES_PER_RACK = (NUM_GPU_BUNDLES * ACTORS_PER_BUNDLE)
 class Creator(object):
     def __init__(self, i, nodes_per_rack):
         self.rack = i
-        self.worker_count = int(nodes_per_rack / ACTORS_PER_BUNDLE)
+        self.worker_count = nodes_per_rack * ACTORS_PER_BUNDLE
+        self.nodes_per_rack = nodes_per_rack
         self.workers = []
 
     def create(self):
         print("create ", self.rack, ray.get_runtime_context().get_node_id())
         bundles = []
-        bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.worker_count)]
-        selectors = [{"ray.io/gpu-domain": f"rack-{self.rack}"} for _ in range(self.worker_count)]
+        bundles += [{"CPU": ACTORS_PER_BUNDLE, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.nodes_per_rack)]
+        selectors = [{"ray.io/gpu-domain": f"rack-{self.rack}"} for _ in range(self.nodes_per_rack)]
         print(selectors)
 
         start_ts = time.time()
-        pg = placement_group(bundles,
-                bundle_label_selector=selectors,
-                strategy="PACK")
+        pg = placement_group(bundles, bundle_label_selector=selectors, strategy="PACK")
         create_ts = time.time()
 
         ray.get(pg.ready())
@@ -41,6 +42,7 @@ class Creator(object):
             ).remote(self.rack, i)
             for i in range(self.worker_count)
         ]
+        print("created ", self.rack, ray.get_runtime_context().get_node_id(), len(self.workers))
 
     def check(self):
         print("check ", self.rack)
@@ -58,6 +60,7 @@ class Worker(object):
     def work(self):
         time.sleep(0.2)
         print(f"work {self.rack}/{self.i}")
+        # pprint(state.available_resources_per_node())
 
 
 def main():
@@ -84,9 +87,7 @@ def main():
         selectors = [{"ray.io/gpu-domain": f"rack-{i}"}]
         print(selectors)
         start_ts = time.time()
-        pg = placement_group(bundles,
-                bundle_label_selector=selectors,
-                strategy="SPREAD")
+        pg = placement_group(bundles, bundle_label_selector=selectors, strategy="SPREAD")
         create_ts = time.time()
 
         ray.get(pg.ready())
@@ -96,12 +97,16 @@ def main():
         print(f"  Creation: {create_ts - start_ts:.2f}s")
         print(f"  Ready:    {ready_ts - create_ts:.2f}s")
 
-        creators.append(Creator.options(
+        creators.append(
+            Creator.options(
                 scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-            ).remote(i, args.nodes_per_rack))
+            ).remote(i, args.nodes_per_rack)
+        )
 
     print(f"Creators: {len(creators)}")
     ray.get([creators[i].create.remote() for i in range(args.rack_count)])
+    if args.debug:
+        pprint(state.available_resources_per_node())
 
     start = time.time()
     while True:
