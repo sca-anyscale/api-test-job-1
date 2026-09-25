@@ -1,4 +1,6 @@
 #!/bin/bash
 set -x
 
-python3 ./pg_run.py
+#PROFILE=--profile
+export SMOKE_TEST=true
+python3 ./pg_run.py  --nodes-per-rack 8 --rack-count 2

@@ -20,27 +20,17 @@ compute_config:
       GPU: 0
     flags: {}
   worker_nodes:
-  - name: rack-0
+{% for k in range(racks) %}  - name: rack-{{k}}
     instance_type: m5.4xlarge
-    min_nodes: 8
-    max_nodes: 8
+    min_nodes: {{nodes_per_rack}}
+    max_nodes: {{nodes_per_rack}}
     market_type: ON_DEMAND
     resources:
       CPU: 16
       GPU: 1
     labels:
-      ray.io/gpu-domain: rack-0
-  - name: rack-1
-    instance_type: m5.4xlarge
-    min_nodes: 8
-    max_nodes: 8
-    market_type: ON_DEMAND
-    resources:
-      CPU: 16
-      GPU: 1
-    labels:
-      ray.io/gpu-domain: rack-1
-
+      ray.io/gpu-domain: rack-{{k}}
+{% endfor %}
   enable_cross_zone_scaling: true
 
 requirements:

@@ -1,0 +1,6 @@
+#!/bin/bash
+set -x
+
+#PROFILE=--profile
+export SMOKE_TEST=true
+python3 ./pg_run.py {{profile}} --nodes-per-rack {{nodes_per_rack}} --rack-count {{racks}}

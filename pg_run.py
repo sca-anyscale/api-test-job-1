@@ -1,90 +1,110 @@
-import os
+import argparse
 import time
-import json
 
 import ray
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
-# Tests are supposed to run for 10 minutes.
-# RUNTIME = 600
 RUNTIME = 60
-#NUM_CPU_BUNDLES = 30
-#NUM_GPU_BUNDLES = 1
+NUM_RACKS = 8
+NUM_GPU_BUNDLES = 16
+ACTORS_PER_BUNDLE = 4
+NODES_PER_RACK = (NUM_GPU_BUNDLES * ACTORS_PER_BUNDLE)
 
 
 @ray.remote(num_cpus=1)
-class Worker(object):
-    def __init__(self, i):
+class Creator(object):
+    def __init__(self, i, nodes_per_rack):
         self.i = i
+        self.nodes_per_rack = nodes_per_rack
+        self.workers = []
+
+    def create(self):
+        print("create ", self.i)
+        bundles = []
+        bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.nodes_per_rack)]
+        selectors = [{"ray.io/gpu-domain": f"rack-{i}"} for _ in range(self.nodes_per_rack)]
+        print(selectors)
+
+        start_ts = time.time()
+        pg = placement_group(bundles,
+                bundle_label_selector=selectors,
+                strategy="SPREAD")
+        create_ts = time.time()
+
+        ray.get(pg.ready())
+        ready_ts = time.time()
+
+        self.workers = [
+            Worker.options(
+                scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
+            ).remote(self.i, i)
+            for i in range(self.nodes_per_rack * ACTORS_PER_BUNDLE)
+        ]
+
+    def check(self):
+        print("check ", self.i)
+        for i in range(self.nodes_per_rack * ACTORS_PER_BUNDLE):
+            ray.get(self.workers[i].work.remote())
+
+
+@ray.remote(num_gpus=1)
+class Worker(object):
+    def __init__(self, rack, i):
+        self.i = i
+        self.rack = i
 
     def work(self):
-        time.sleep(0.1)
-        print("work ", self.i)
-
-
-@ray.remote(num_cpus=1, num_gpus=1)
-class Trainer(object):
-    def __init__(self, i):
-        self.i = i
-
-    def train(self):
         time.sleep(0.2)
-        print("train ", self.i)
+        print(f"work {self.rack}/{self.i}")
 
 
 def main():
+    parser = argparse.ArgumentParser(description='new API test')
+    parser.add_argument('-d', '--debug', action='store_true')
+    parser.add_argument('-n', '--nodes-per-rack', type=int, default=NODES_PER_RACK)
+    parser.add_argument('-r', '--rack-count', type=int, default=NUM_RACKS)
+
+    args = parser.parse_args()
+
     ray.init(address="auto")
-    res = ray.cluster_resources()
-    num_gpu = int(res.get('GPU', 0))
-    #num_cpu = int(res['CPU'] - 2 * num_gpu) # assumes 1 GPU per GPU node
-    num_cpu = int(res['CPU'] / 2) + 1
 
+    creators = []
     bundles = []
-    bundles += [{"CPU": 1, "GPU": 1} for _ in range(num_gpu)]
-    bundles += [{"CPU": 1} for _ in range(num_cpu)]
+    bundles += [{"CPU": 1} for _ in range(args.rack_count)]
+    selectors = [{"ray.io/gpu-domain": f"rack-{i}"} for i in range(args.rack_count)]
+    print(selectors)
 
-    start_ts = time.time()
-    pg = placement_group(bundles, strategy="PACK")
-    create_ts = time.time()
+    for i in range(args.rack_count):
+        start_ts = time.time()
+        pg = placement_group(bundles,
+                bundle_label_selector=selectors,
+                strategy="SPREAD")
+        create_ts = time.time()
 
-    ray.get(pg.ready())
-    ready_ts = time.time()
+        ray.get(pg.ready())
+        ready_ts = time.time()
 
-    # time.sleep(5)
-    print(f'  Creation: {create_ts - start_ts:.2f}s')
-    print(f'  Ready:    {ready_ts - create_ts:.2f}s')
+        # time.sleep(5)
+        print(f"  Creation: {create_ts - start_ts:.2f}s")
+        print(f"  Ready:    {ready_ts - create_ts:.2f}s")
 
-    workers = [
-        Worker.options(
-            scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-        ).remote(i)
-        for i in range(num_cpu)
-    ]
+        creators += [
+            Creator.options(
+                scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
+            ).remote(i, args.nodes_per_rack)
+            for i in range(NUM_CREATORS)
+        ]
 
-    trainers = [
-        Trainer.options(
-            scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-        ).remote(i)
-        for i in range(num_gpu)
-    ]
-
-    print(f'Workers: {len(workers)}')
-    print(f'Trainers: {len(trainers)}')
+    print(f"Creators: {len(creators)}")
+    ray.get([creators[i].create.remote() for i in range(NUM_CREATORS)])
 
     start = time.time()
     while True:
-        ray.get([workers[i].work.remote() for i in range(num_cpu)])
-        #ray.get(trainer.train.remote())
-        ray.get([trainers[i].train.remote() for i in range(num_gpu)])
+        ray.get([creators[i].check.remote() for i in range(NUM_CREATORS)])
         end = time.time()
         if end - start > RUNTIME:
             break
-
-    if "TEST_OUTPUT_JSON" in os.environ:
-        with open(os.environ["TEST_OUTPUT_JSON"], "w") as out_file:
-            results = {}
-            json.dump(results, out_file)
 
 
 if __name__ == "__main__":
