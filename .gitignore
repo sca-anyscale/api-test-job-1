@@ -2,3 +2,4 @@ job.yaml
 job.yaml.tmp
 __pycache__
 RUNIT
+.*.sw*
