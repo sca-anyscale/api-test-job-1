@@ -27,7 +27,7 @@ compute_config:
     market_type: ON_DEMAND
     resources:
       CPU: 16
-      GPU: 1
+      GPU: 4
     labels:
       ray.io/gpu-domain: rack-0
   - name: rack-1
@@ -37,7 +37,7 @@ compute_config:
     market_type: ON_DEMAND
     resources:
       CPU: 16
-      GPU: 1
+      GPU: 4
     labels:
       ray.io/gpu-domain: rack-1
 

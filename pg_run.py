@@ -5,7 +5,7 @@ import ray
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
-RUNTIME = 60
+RUNTIME = 30
 NUM_RACKS = 8
 NUM_GPU_BUNDLES = 16
 ACTORS_PER_BUNDLE = 4
@@ -15,15 +15,15 @@ NODES_PER_RACK = (NUM_GPU_BUNDLES * ACTORS_PER_BUNDLE)
 @ray.remote(num_cpus=1)
 class Creator(object):
     def __init__(self, i, nodes_per_rack):
-        self.i = i
+        self.rack = i
         self.worker_count = int(nodes_per_rack / ACTORS_PER_BUNDLE)
         self.workers = []
 
     def create(self):
-        print("create ", self.i)
+        print("create ", self.rack)
         bundles = []
         bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.worker_count)]
-        selectors = [{"ray.io/gpu-domain": f"rack-{self.i}"} for _ in range(self.worker_count)]
+        selectors = [{"ray.io/gpu-domain": f"rack-{self.rack}"} for _ in range(self.worker_count)]
         print(selectors)
 
         start_ts = time.time()
@@ -38,12 +38,12 @@ class Creator(object):
         self.workers = [
             Worker.options(
                 scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-            ).remote(self.i, i)
+            ).remote(self.rack, i)
             for i in range(self.worker_count)
         ]
 
     def check(self):
-        print("check ", self.i)
+        print("check ", self.rack)
         for i in range(self.worker_count):
             ray.get(self.workers[i].work.remote())
 
@@ -51,8 +51,9 @@ class Creator(object):
 @ray.remote(num_gpus=1)
 class Worker(object):
     def __init__(self, rack, i):
+        self.rack = rack
         self.i = i
-        self.rack = i
+        print(f"worker {self.rack}/{self.i}")
 
     def work(self):
         time.sleep(0.2)
@@ -70,12 +71,18 @@ def main():
     ray.init(address="auto")
 
     creators = []
+    '''
     bundles = []
     bundles += [{"CPU": 1} for _ in range(args.rack_count)]
     selectors = [{"ray.io/gpu-domain": f"rack-{i}"} for i in range(args.rack_count)]
     print(selectors)
+    '''
 
     for i in range(args.rack_count):
+        bundles = []
+        bundles += [{"CPU": 1}]
+        selectors = [{"ray.io/gpu-domain": f"rack-{i}"}]
+        print(selectors)
         start_ts = time.time()
         pg = placement_group(bundles,
                 bundle_label_selector=selectors,
