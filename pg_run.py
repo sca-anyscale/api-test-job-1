@@ -20,7 +20,7 @@ class Creator(object):
         self.workers = []
 
     def create(self):
-        print("create ", self.rack)
+        print("create ", self.rack, ray.get_runtime_context().get_node_id())
         bundles = []
         bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.worker_count)]
         selectors = [{"ray.io/gpu-domain": f"rack-{self.rack}"} for _ in range(self.worker_count)]
@@ -53,7 +53,7 @@ class Worker(object):
     def __init__(self, rack, i):
         self.rack = rack
         self.i = i
-        print(f"worker {self.rack}/{self.i}")
+        print(f"worker {self.rack}/{self.i} on {ray.get_runtime_context().get_node_id()}")
 
     def work(self):
         time.sleep(0.2)
