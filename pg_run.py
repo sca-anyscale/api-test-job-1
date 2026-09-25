@@ -16,20 +16,20 @@ NODES_PER_RACK = (NUM_GPU_BUNDLES * ACTORS_PER_BUNDLE)
 class Creator(object):
     def __init__(self, i, nodes_per_rack):
         self.i = i
-        self.nodes_per_rack = nodes_per_rack
+        self.worker_count = int(nodes_per_rack / ACTORS_PER_BUNDLE)
         self.workers = []
 
     def create(self):
         print("create ", self.i)
         bundles = []
-        bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.nodes_per_rack)]
-        selectors = [{"ray.io/gpu-domain": f"rack-{i}"} for _ in range(self.nodes_per_rack)]
+        bundles += [{"CPU": 1, "GPU": ACTORS_PER_BUNDLE} for _ in range(self.worker_count)]
+        selectors = [{"ray.io/gpu-domain": f"rack-{self.i}"} for _ in range(self.worker_count)]
         print(selectors)
 
         start_ts = time.time()
         pg = placement_group(bundles,
                 bundle_label_selector=selectors,
-                strategy="SPREAD")
+                strategy="PACK")
         create_ts = time.time()
 
         ray.get(pg.ready())
@@ -39,12 +39,12 @@ class Creator(object):
             Worker.options(
                 scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
             ).remote(self.i, i)
-            for i in range(self.nodes_per_rack * ACTORS_PER_BUNDLE)
+            for i in range(self.worker_count)
         ]
 
     def check(self):
         print("check ", self.i)
-        for i in range(self.nodes_per_rack * ACTORS_PER_BUNDLE):
+        for i in range(self.worker_count):
             ray.get(self.workers[i].work.remote())
 
 
@@ -89,19 +89,16 @@ def main():
         print(f"  Creation: {create_ts - start_ts:.2f}s")
         print(f"  Ready:    {ready_ts - create_ts:.2f}s")
 
-        creators += [
-            Creator.options(
+        creators.append(Creator.options(
                 scheduling_strategy=PlacementGroupSchedulingStrategy(placement_group=pg)
-            ).remote(i, args.nodes_per_rack)
-            for i in range(NUM_CREATORS)
-        ]
+            ).remote(i, args.nodes_per_rack))
 
     print(f"Creators: {len(creators)}")
-    ray.get([creators[i].create.remote() for i in range(NUM_CREATORS)])
+    ray.get([creators[i].create.remote() for i in range(args.rack_count)])
 
     start = time.time()
     while True:
-        ray.get([creators[i].check.remote() for i in range(NUM_CREATORS)])
+        ray.get([creators[i].check.remote() for i in range(args.rack_count)])
         end = time.time()
         if end - start > RUNTIME:
             break
