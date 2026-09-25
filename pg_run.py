@@ -4,6 +4,7 @@ import time
 
 import ray
 import ray._private.state as state
+from ray.util.state import list_actors
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
@@ -35,6 +36,8 @@ class Creator(object):
 
         ray.get(pg.ready())
         ready_ts = time.time()
+        print(f"  Creation ({self.rack}): {create_ts - start_ts:.2f}s")
+        print(f"  Ready ({self.rack}):    {ready_ts - create_ts:.2f}s")
 
         self.workers = [
             Worker.options(
@@ -65,9 +68,11 @@ class Worker(object):
 
 def main():
     parser = argparse.ArgumentParser(description='new API test')
+    parser.add_argument('-R', '--runtime', type=int, default=RUNTIME)
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-n', '--nodes-per-rack', type=int, default=NODES_PER_RACK)
     parser.add_argument('-r', '--rack-count', type=int, default=NUM_RACKS)
+    parser.add_argument('-s', '--sleep', type=int, default=0)
 
     args = parser.parse_args()
 
@@ -112,8 +117,36 @@ def main():
     while True:
         ray.get([creators[i].check.remote() for i in range(args.rack_count)])
         end = time.time()
-        if end - start > RUNTIME:
+        if end - start > args.runtime:
             break
+
+    job_id = ray.get_runtime_context().get_job_id()
+    if args.debug:
+        pprint(list_actors(filters=[("state", "=", "ALIVE")]))
+
+    creators = list_actors(filters=[("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Creator")])
+    if args.debug:
+        print("CREATORS", len(creators))
+    assert len(creators) == args.rack_count, "incorrect creator count"
+    nodes = set([a.node_id for a in creators])
+    assert len(nodes) == args.rack_count, "wrong creator node count"
+
+    expected_workers = args.rack_count * args.nodes_per_rack * ACTORS_PER_BUNDLE
+    workers = list_actors(limit=expected_workers, filters=[("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Worker")])
+    if args.debug:
+        print("WORKERS", len(workers))
+    assert len(workers) == expected_workers, "incorrect worker count"
+    nodes = set([a.node_id for a in workers])
+    assert len(nodes) == args.rack_count * args.nodes_per_rack, "wrong worker node count"
+
+    resources = state.available_resources_per_node()
+    for node in nodes:
+        if args.debug:
+            pprint(resources[node])
+        assert 'GPU' not in resources[node], "unused GPUs"
+
+    if args.sleep:
+        time.sleep(args.sleep)
 
 
 if __name__ == "__main__":

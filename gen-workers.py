@@ -7,7 +7,7 @@ def main():
     ''' main '''
     parser = argparse.ArgumentParser(description='generate rack labels')
     parser.add_argument('-d', '--debug', action='store_true')
-    parser.add_argument('-n', '--nodes-per-rack', type=int, default=64)
+    parser.add_argument('-n', '--nodes-per-rack', type=int, default=2)
     parser.add_argument('-p', '--profile', action='store_true')
     parser.add_argument('-r', '--num-racks', type=int, default=8)
 
