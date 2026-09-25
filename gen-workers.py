@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -38,6 +39,7 @@ def main():
     with open('RUNIT', 'w', encoding='utf-8') as ofile:
         ofile.write(output)
         ofile.write('\n')
+    os.chmod('RUNIT', 0o755)
 
 if __name__ == '__main__':
     main()
