@@ -124,15 +124,17 @@ def main():
     if args.debug:
         pprint(list_actors(filters=[("state", "=", "ALIVE")]))
 
-    creators = list_actors(filters=[("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Creator")])
+    filters = [("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Creator")]
+    creators = list_actors(limit=args.rack_count * 2, filters=filters)
     if args.debug:
         print("CREATORS", len(creators))
     assert len(creators) == args.rack_count, "incorrect creator count"
     nodes = set([a.node_id for a in creators])
     assert len(nodes) == args.rack_count, "wrong creator node count"
 
+    filters = [("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Worker")]
     expected_workers = args.rack_count * args.nodes_per_rack * ACTORS_PER_BUNDLE
-    workers = list_actors(limit=expected_workers, filters=[("state", "=", "ALIVE"), ("job_id", "=", f"{job_id}"), ("class_name", "=", "Worker")])
+    workers = list_actors(limit=expected_workers * 2, filters=filters)
     if args.debug:
         print("WORKERS", len(workers))
     assert len(workers) == expected_workers, "incorrect worker count"
@@ -142,6 +144,7 @@ def main():
     resources = state.available_resources_per_node()
     for node in nodes:
         if args.debug:
+            print(node)
             pprint(resources[node])
         assert 'GPU' not in resources[node], "unused GPUs"
 
