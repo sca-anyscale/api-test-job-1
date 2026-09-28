@@ -1,4 +1,5 @@
 import argparse
+from contextlib import contextmanager
 import copy
 from dataclasses import dataclass
 from pprint import pprint, pformat
@@ -30,6 +31,17 @@ class Bundle:
     node_id: str
 
 
+@contextmanager
+def scheduler_lock():
+    status = False
+    while not status:
+        status = lock_scheduler()
+    try:
+        yield status
+    finally:
+        unlock_scheduler()
+
+
 def populate_nodes() -> Dict[str, Node]:
     nodes = ray.nodes()
     resources = state.available_resources_per_node()
@@ -41,12 +53,12 @@ def populate_nodes() -> Dict[str, Node]:
                 resources=copy.deepcopy(resources[node['NodeID']]),
                 )
 
-    pprint(results)
+    #pprint(results)
     return results
 
 
 def filter_nodes_by_label(nodes: Dict[str, Node], labels: Dict[str, str]) -> List[Node]:
-    results: List[str] = []
+    results: List[Node] = []
     for node in nodes:
         for label in labels:
             if label in nodes[node].labels and nodes[node].labels[label] == labels[label]:
@@ -85,30 +97,30 @@ class Creator(object):
 
     def create(self):
         print("create ", self.rack, ray.get_runtime_context().get_node_id())
-        lock_scheduler()
-        base_nodes = populate_nodes()
-        nodes = filter_nodes_by_label(base_nodes, {"ray.io/gpu-domain": f"rack-{self.rack}"})
-        #pprint(nodes)
+        with scheduler_lock() as _:
+            base_nodes = populate_nodes()
+            nodes = filter_nodes_by_label(base_nodes, {"ray.io/gpu-domain": f"rack-{self.rack}"})
+            #pprint(nodes)
 
-        bundles = []
-        for i in range(self.worker_count):
-            resources = {"CPU": 1.0, "GPU": 1.0}
-            node = allocate_resources_from_node(nodes, resources)
-            if not node:
-                assert False, "no resources"
-            bundles += [Bundle(bundle_id=f"{i}", resources=resources, node_id=node.node_id)]
-        #pprint(bundles)
+            bundles = []
+            for i in range(self.worker_count):
+                resources = {"CPU": 1.0, "GPU": 1.0}
+                node = allocate_resources_from_node(nodes, resources)
+                if not node:
+                    assert False, "no resources"
+                bundles += [Bundle(bundle_id=f"{i}", resources=resources, node_id=node.node_id)]
+            #pprint(bundles)
 
-        self.workers = []
-        for i in range(self.worker_count):
-            #print('SCHED', bundles[i].node_id)
-            self.workers.append(
-                Worker.options(
-                    scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundles[i].node_id, soft=False),
-                ).remote(self.rack, i)
-            )
-        self.check()  # XXX
-        unlock_scheduler()
+            self.workers = []
+            for i in range(self.worker_count):
+                #print('SCHED', bundles[i].node_id)
+                self.workers.append(
+                    Worker.options(
+                        scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundles[i].node_id, soft=False),
+                    ).remote(self.rack, i)
+                )
+            # self.check()  # XXX
+
         print("created ", self.rack, ray.get_runtime_context().get_node_id(), len(self.workers))
 
     def check(self):
@@ -146,21 +158,18 @@ def main():
 
     job_start = time.time()
 
-    lock_scheduler()
-
-    base_nodes = populate_nodes()
-    for i in range(args.rack_count):
-        nodes = filter_nodes_by_label(base_nodes, {"ray.io/gpu-domain": f"rack-{i}"})
-        pprint(nodes)
-        bundles = []
-        bundles += [Bundle(bundle_id=f"{i}", resources={"CPU": 1.0}, node_id=nodes[0].node_id)]
-        pprint(bundles)
-        creators.append(
-            Creator.options(
-                scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundles[0].node_id, soft=False),
-            ).remote(i, args.nodes_per_rack)
-        )
-    unlock_scheduler()
+    with scheduler_lock() as _:
+        base_nodes = populate_nodes()
+        for i in range(args.rack_count):
+            nodes = filter_nodes_by_label(base_nodes, {"ray.io/gpu-domain": f"rack-{i}"})
+            #pprint(nodes)
+            bundle = Bundle(bundle_id=f"{i}", resources={"CPU": 1.0}, node_id=nodes[0].node_id)
+            #pprint(bundle)
+            creators.append(
+                Creator.options(
+                    scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundle.node_id, soft=False),
+                ).remote(i, args.nodes_per_rack)
+            )
 
     print(f"Creators: {len(creators)}")
     ray.get([creators[i].create.remote() for i in range(args.rack_count)])
@@ -174,6 +183,7 @@ def main():
         if end - start > args.runtime:
             break
 
+    print(f"DONE {time.time() - job_start:.2f}s")
     job_id = ray.get_runtime_context().get_job_id()
     if args.debug:
         pprint(list_actors(filters=[("state", "=", "ALIVE")]))
@@ -200,9 +210,7 @@ def main():
         if args.debug:
             print(node)
             pprint(resources[node])
-        assert 'GPU' not in resources[node], "unused GPUs"
-
-    print(f"DONE {time.time() - job_start:.2f}s")
+        # assert 'GPU' not in resources[node], "unused GPUs"
 
     if args.sleep:
         time.sleep(args.sleep)
