@@ -78,6 +78,8 @@ def main():
 
     ray.init(address="auto")
 
+    job_start = time.time()
+
     creators = []
     '''
     bundles = []
@@ -147,6 +149,8 @@ def main():
             print(node)
             pprint(resources[node])
         assert 'GPU' not in resources[node], "unused GPUs"
+
+    print(f"DONE {time.time() - job_start:.2f}s")
 
     if args.sleep:
         time.sleep(args.sleep)
