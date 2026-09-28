@@ -9,7 +9,7 @@ name: prasad-image-classification-m5n-g6.4xlarge-20260225-3
 # image_uri: anyscale/ray:2.56.0-slim-py310-cu129
 #image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-scale-42
 #image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-task-8
-image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-db0a114fb1
+image_uri: 830883877497.dkr.ecr.us-west-2.amazonaws.com/anyscale/ray:sca-api-test-1
 #containerfile: ./Dockerfile
 
 compute_config:
@@ -22,8 +22,8 @@ compute_config:
   worker_nodes:
 {% for k in range(racks) %}  - name: rack-{{k}}
     instance_type: m5.4xlarge
-    min_nodes: {{nodes_per_rack}}
-    max_nodes: {{nodes_per_rack}}
+    min_nodes: {{job_nodes_per_rack}}
+    max_nodes: {{job_nodes_per_rack}}
     market_type: ON_DEMAND
     resources:
       CPU: 16
@@ -50,7 +50,7 @@ cloud: anyscale_v2_default_cloud
 
 env_vars:
   RAY_centralized_actor_scheduling: "true"
-  # RAY_BACKEND_LOG_LEVEL: "debug"
+  RAY_BACKEND_LOG_LEVEL: "debug"
   ANYSCALE_DISABLE_OPTIMIZED_RAY: "true"
   ANYSCALE_DISABLE_GITIGNORE_EXCLUSION: "1"
   PROFILER_MODE: "none"          # "nsys", "torch", or "none"

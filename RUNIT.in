@@ -3,4 +3,6 @@ set -x
 
 #PROFILE=--profile
 export SMOKE_TEST=true
-python3 ./pg_run.py {{profile}} --nodes-per-rack {{nodes_per_rack}} --rack-count {{racks}}
+for i in $(seq 1 {{copies}}); do
+	python3 ./pg_run{{new}}.py {{profile}} --nodes-per-rack {{nodes_per_rack}} --rack-count {{racks}}
+done
