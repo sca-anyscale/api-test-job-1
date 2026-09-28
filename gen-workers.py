@@ -21,11 +21,16 @@ def main():
 
     template = env.get_template('job.yaml.in')
 
+    bg = ''
     new = ''
+
     if args.new_job:
         new = '_new'
+    if args.copies > 1:
+        bg = '&'
 
     props = {
+        'bg': bg,
         'new': new,
         'copies': args.copies,
         'racks': args.num_racks,

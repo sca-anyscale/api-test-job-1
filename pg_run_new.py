@@ -1,4 +1,5 @@
 import argparse
+import copy
 from dataclasses import dataclass
 from pprint import pprint, pformat
 import time
@@ -32,13 +33,15 @@ class Bundle:
 def populate_nodes() -> Dict[str, Node]:
     nodes = ray.nodes()
     resources = state.available_resources_per_node()
+    #pprint(resources)
     results: Dict[str, Node] = {}
     for node in nodes:
         results[node['NodeID']] = Node(node_id=node['NodeID'],
                 labels=node['Labels'],
-                resources=node['Resources'],
+                resources=copy.deepcopy(resources[node['NodeID']]),
                 )
 
+    pprint(results)
     return results
 
 
@@ -85,7 +88,7 @@ class Creator(object):
         lock_scheduler()
         base_nodes = populate_nodes()
         nodes = filter_nodes_by_label(base_nodes, {"ray.io/gpu-domain": f"rack-{self.rack}"})
-        pprint(nodes)
+        #pprint(nodes)
 
         bundles = []
         for i in range(self.worker_count):
@@ -94,13 +97,17 @@ class Creator(object):
             if not node:
                 assert False, "no resources"
             bundles += [Bundle(bundle_id=f"{i}", resources=resources, node_id=node.node_id)]
+        #pprint(bundles)
 
-        self.workers = [
-            Worker.options(
-                scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundles[i].node_id, soft=False),
-            ).remote(self.rack, i)
-            for i in range(self.worker_count)
-        ]
+        self.workers = []
+        for i in range(self.worker_count):
+            #print('SCHED', bundles[i].node_id)
+            self.workers.append(
+                Worker.options(
+                    scheduling_strategy=NodeAffinitySchedulingStrategy(node_id=bundles[i].node_id, soft=False),
+                ).remote(self.rack, i)
+            )
+        self.check()  # XXX
         unlock_scheduler()
         print("created ", self.rack, ray.get_runtime_context().get_node_id(), len(self.workers))
 
